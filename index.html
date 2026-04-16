@@ -34,7 +34,6 @@
 
     <script>
         // --- Supabase Config ---
-        // 変数名 'supabase' がライブラリと競合するため 'sbClient' に変更
         const SB_URL = "https://xgiuwmnkicnkwrcgmdqv.supabase.co"; 
         const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhnaXV3m5raWNua3dyY2dtZHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMzYxNzgsImV4cCI6MjA5MTkxMjE3OH0.Ky-fQN4R8Ts28Tu3qO3a9d4qgsdEgQ8Bwu8CqeH4VP0";
         const sbClient = window.supabase.createClient(SB_URL, SB_KEY);
@@ -53,7 +52,8 @@
             lastResult: null,
             selectedTopic: 'g5_ratio',
             selectedMode: 'classic',
-            gameData: {} // モードごとの特殊データ（塔の高さ、お宝、酸素など）
+            gameData: {},
+            loading: false
         };
 
         const topics = {
@@ -117,7 +117,7 @@
                     if(r() > 0.5) { q = `半径${rad}cmの円の面積は？(円周率3.14)`; a = rad * rad * 3.14; }
                     else { q = `直径10cmの円の周りの長さは？(円周率3.14)`; a = 31.4; }
                     break;
-                default: // 共通
+                default:
                     let n1 = ri(20), n2 = ri(20);
                     q = `${n1} + ${n2}`; a = n1 + n2;
             }
@@ -131,27 +131,84 @@
             return { q, a, opts: opts.sort(() => r() - 0.5) };
         }
 
-        // --- View Handlers ---
         function setView(v) { state.view = v; render(); }
 
         async function createHost() {
+            state.loading = true; render();
             const pin = Math.floor(100000 + Math.random() * 899999).toString();
             state.gamePin = pin;
-            await sbClient.from('game_lobbies').insert([{ game_pin: pin, status: 'waiting', topic: state.selectedTopic, mode: state.selectedMode }]);
+            
+            const { error } = await sbClient.from('game_lobbies').insert([{ 
+                game_pin: pin, 
+                status: 'waiting', 
+                topic: state.selectedTopic, 
+                mode: state.selectedMode 
+            }]);
+
+            if (error) {
+                alert("ロビーの作成に失敗しました: " + error.message);
+                state.loading = false; render();
+                return;
+            }
+
+            state.loading = false;
             setView('LOBBY');
             subscribeToGame(pin);
         }
 
         async function joinGame() {
-            const pin = document.getElementById('pinInput').value;
+            const pinRaw = document.getElementById('pinInput').value;
             const nick = document.getElementById('nickInput').value;
-            if (!pin || !nick) return;
-            const { data: lobby } = await sbClient.from('game_lobbies').select('*').eq('game_pin', pin).single();
-            if (!lobby) return alert("PINが見つかりません");
-            const { data: p } = await sbClient.from('players').insert([{ game_pin: pin, nickname: nick, score: 0 }]).select().single();
-            state.gamePin = pin; state.nickname = nick; state.playerId = p.id;
+            if (!pinRaw || !nick) return alert("PINと名前を入力してね！");
+            
+            const pin = pinRaw.toString();
+            state.loading = true; render();
+
+            // ロビーが存在するか、待機中かを確認
+            const { data: lobby, error: fetchError } = await sbClient
+                .from('game_lobbies')
+                .select('*')
+                .eq('game_pin', pin)
+                .maybeSingle();
+
+            if (fetchError) {
+                alert("通信エラーが発生しました: " + fetchError.message);
+                state.loading = false; render();
+                return;
+            }
+
+            if (!lobby) {
+                alert("PIN「" + pin + "」が見つかりません。番号を間違えていないか確認してね。");
+                state.loading = false; render();
+                return;
+            }
+
+            if (lobby.status !== 'waiting') {
+                alert("このゲームはすでに開始されているか、終了しています。");
+                state.loading = false; render();
+                return;
+            }
+
+            // プレイヤーを登録
+            const { data: p, error: joinError } = await sbClient
+                .from('players')
+                .insert([{ game_pin: pin, nickname: nick, score: 0 }])
+                .select()
+                .single();
+
+            if (joinError) {
+                alert("参加に失敗しました: " + joinError.message);
+                state.loading = false; render();
+                return;
+            }
+
+            state.gamePin = pin; 
+            state.nickname = nick; 
+            state.playerId = p.id;
+            state.loading = false;
             setView('LOBBY');
             subscribeToGame(pin);
+            fetchPlayers(pin);
         }
 
         function subscribeToGame(pin) {
@@ -179,7 +236,7 @@
         function startGame() {
             state.gameStatus = 'playing';
             state.view = 'PLAYING';
-            state.timeLeft = 120; // 2分
+            state.timeLeft = 120;
             state.gameData = { height: 0, items: [], oxygen: 100 };
             nextQuestion();
             const timer = setInterval(() => {
@@ -203,7 +260,6 @@
             if (isCorrect) {
                 state.lastResult = 'correct';
                 let gain = 100;
-                // モード別の演出/加算
                 if(state.selectedMode === 'tower') state.gameData.height += 1;
                 if(state.selectedMode === 'treasure') state.gameData.items.push('💎');
                 if(state.selectedMode === 'submarine') state.gameData.oxygen = Math.min(100, state.gameData.oxygen + 15);
@@ -221,6 +277,15 @@
 
         function render() {
             const app = document.getElementById('app');
+            
+            if (state.loading) {
+                app.innerHTML = `<div class="h-full flex items-center justify-center bg-black/50 backdrop-blur-sm z-[100] absolute inset-0 text-white flex-col gap-4">
+                    <div class="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <div class="text-2xl font-black">読み込み中...</div>
+                </div>`;
+                return;
+            }
+
             if (state.view === 'MAIN_MENU') {
                 app.innerHTML = `<div class="flex-1 flex flex-col items-center justify-center p-4">
                     <h1 class="text-7xl font-black italic mb-8 drop-shadow-2xl text-white">Sahoot!</h1>
@@ -253,6 +318,7 @@
                         </div>
 
                         <button onclick="${state.userRole==='HOST'?'createHost()':'startGame()'}" class="w-full bg-black text-white py-6 rounded-3xl text-3xl font-black btn-fancy">スタート！</button>
+                        <button onclick="setView('MAIN_MENU')" class="w-full mt-4 text-gray-400 font-bold">もどる</button>
                     </div>
                 </div>`;
             } else if (state.view === 'ENTER_PIN') {
