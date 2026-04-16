@@ -22,21 +22,24 @@
         .bg-answer-blue { background: #1368ce; }
         .bg-answer-yellow { background: #d89e00; }
         .bg-answer-green { background: #26890c; }
-        
-        /* Game Mode Themes */
-        .theme-tower { background: linear-gradient(to bottom, #1a2a6c, #b21f1f, #fdbb2d); }
-        .theme-treasure { background: linear-gradient(to bottom, #000428, #004e92); }
-        .theme-submarine { background: linear-gradient(to bottom, #203a43, #2c5364); }
     </style>
 </head>
 <body class="h-full kahoot-bg">
     <div id="app" class="h-full flex flex-col"></div>
 
     <script>
-        // --- Supabase Config ---
-        const SB_URL = "https://xgiuwmnkicnkwrcgmdqv.supabase.co"; 
-        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhnaXV3m5raWNua3dyY2dtZHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMzYxNzgsImV4cCI6MjA5MTkxMjE3OH0.Ky-fQN4R8Ts28Tu3qO3a9d4qgsdEgQ8Bwu8CqeH4VP0";
-        const sbClient = window.supabase.createClient(SB_URL, SB_KEY);
+        /**
+         * --- 重要: Supabaseの設定 (指定されたURLとKEYに更新しました) ---
+         */
+        const SB_URL = "https://hqldwfllnqmjcwqgrpjb.supabase.co"; 
+        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxbGR3ZmxsbnFtamN3cWdycGpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMzgzNzksImV4cCI6MjA5MTkxNDM3OX0.WIA3aiAXdN7sZStu_RPMwFLjp2Y8zbbI-vJFa-PIxkI";
+        
+        let sbClient;
+        try {
+            sbClient = window.supabase.createClient(SB_URL, SB_KEY);
+        } catch (e) {
+            console.error("Supabaseの初期化に失敗しました。設定を確認してください。");
+        }
 
         let state = {
             view: 'MAIN_MENU',
@@ -59,22 +62,13 @@
         const topics = {
             g1_2_plus: { name: '1・2年: たし算ひき算', icon: '🍎' },
             g3_4_multi: { name: '3・4年: かけ算わり算', icon: '📘' },
-            g4_decimal: { name: '4年: 小数・がい数', icon: '📏' },
             g5_ratio: { name: '5年: 割合 (％・割)', icon: '⚡' },
-            g5_speed: { name: '5年: 速さ・単位量', icon: '🏃' },
-            g5_fraction: { name: '5年: 分数のたしひき', icon: '🍰' },
-            g5_area: { name: '5年: 三角形・台形の面積', icon: '📐' },
-            g6_frac_calc: { name: '6年: 分数のかけわり', icon: '🎓' },
-            g6_ratio: { name: '6年: 比とその利用', icon: '⚖️' },
-            g6_circle: { name: '6年: 円の面積・体積', icon: '⚪' },
-            g6_proportions: { name: '6年: 比例と反比例', icon: '📈' }
+            g6_ratio: { name: '6年: 比とその利用', icon: '⚖️' }
         };
 
         const modes = {
             classic: { name: 'クラシック', desc: '基本の早押しクイズ', icon: '📱' },
-            tower: { name: 'タワーを高くしよう', desc: '正解して塔を高く積み上げる', icon: '🏰' },
-            treasure: { name: 'トレジャーハント', desc: 'お宝を集めてチームで協力', icon: '💎' },
-            submarine: { name: 'サブマリン', desc: '酸素がなくなる前に脱出！', icon: '🚢' }
+            tower: { name: 'タワーを高くしよう', desc: '正解して塔を高く積み上げる', icon: '🏰' }
         };
 
         function generateProblem(topicId) {
@@ -85,37 +79,8 @@
             switch(topicId) {
                 case 'g5_ratio':
                     let base = ri(10, 1) * 100;
-                    if(r() > 0.5) {
-                        let rate = ri(9) * 10;
-                        q = `${base}円の${rate}％は？`; a = base * (rate/100);
-                    } else {
-                        let rate = ri(5);
-                        q = `${base}円の${rate}割は？`; a = base * (rate/10);
-                    }
-                    break;
-                case 'g5_speed':
-                    if(r() > 0.5) {
-                        let s = ri(8, 2) * 10, t = ri(4, 2);
-                        q = `時速${s}kmで${t}時間走ると？(km)`; a = s * t;
-                    } else {
-                        let pop = ri(10, 5) * 10, area = ri(5, 2);
-                        q = `${area}㎡に${pop}人。1㎡あたり何人？`; a = pop / area;
-                    }
-                    break;
-                case 'g5_area':
-                    let h = ri(10, 2), w = ri(10, 2);
-                    if(r() > 0.5) { q = `底辺${w}cm、高さ${h}cmの三角形の面積は？`; a = (w * h) / 2; }
-                    else { q = `上底${w}cm、下底${w+2}cm、高さ${h}cmの台形の面積は？`; a = ((w + w + 2) * h) / 2; }
-                    break;
-                case 'g6_ratio':
-                    let b1 = ri(5, 2), b2 = ri(8, 2), m = ri(5, 2);
-                    if(r() > 0.5) { q = `${b1} : ${b2} = x : ${b2*m}  xは？`; a = b1*m; }
-                    else { q = `80gを 3:5 に分けると、少ない方は何g？`; a = 30; }
-                    break;
-                case 'g6_circle':
-                    let rad = ri(5, 1) * 2;
-                    if(r() > 0.5) { q = `半径${rad}cmの円の面積は？(円周率3.14)`; a = rad * rad * 3.14; }
-                    else { q = `直径10cmの円の周りの長さは？(円周率3.14)`; a = 31.4; }
+                    let rate = ri(9) * 10;
+                    q = `${base}円の${rate}％は？`; a = base * (rate/100);
                     break;
                 default:
                     let n1 = ri(20), n2 = ri(20);
@@ -146,7 +111,7 @@
             }]);
 
             if (error) {
-                alert("ロビーの作成に失敗しました: " + error.message);
+                alert("データベースエラー: " + error.message);
                 state.loading = false; render();
                 return;
             }
@@ -157,14 +122,18 @@
         }
 
         async function joinGame() {
-            const pinRaw = document.getElementById('pinInput').value;
-            const nick = document.getElementById('nickInput').value;
-            if (!pinRaw || !nick) return alert("PINと名前を入力してね！");
+            const pinInput = document.getElementById('pinInput');
+            const nickInput = document.getElementById('nickInput');
+            if (!pinInput || !nickInput) return;
             
-            const pin = pinRaw.toString();
+            const pin = pinInput.value.trim();
+            const nick = nickInput.value.trim();
+            
+            if (!pin || !nick) return alert("PINと名前を入力してね！");
+            
             state.loading = true; render();
 
-            // ロビーが存在するか、待機中かを確認
+            // PINがDBに存在するかチェック
             const { data: lobby, error: fetchError } = await sbClient
                 .from('game_lobbies')
                 .select('*')
@@ -172,24 +141,18 @@
                 .maybeSingle();
 
             if (fetchError) {
-                alert("通信エラーが発生しました: " + fetchError.message);
+                alert("接続エラー: " + fetchError.message);
                 state.loading = false; render();
                 return;
             }
 
             if (!lobby) {
-                alert("PIN「" + pin + "」が見つかりません。番号を間違えていないか確認してね。");
+                alert("PIN「" + pin + "」が見つかりませんでした。番号を確認してね。");
                 state.loading = false; render();
                 return;
             }
 
-            if (lobby.status !== 'waiting') {
-                alert("このゲームはすでに開始されているか、終了しています。");
-                state.loading = false; render();
-                return;
-            }
-
-            // プレイヤーを登録
+            // プレイヤー登録
             const { data: p, error: joinError } = await sbClient
                 .from('players')
                 .insert([{ game_pin: pin, nickname: nick, score: 0 }])
@@ -197,7 +160,7 @@
                 .single();
 
             if (joinError) {
-                alert("参加に失敗しました: " + joinError.message);
+                alert("参加エラー: " + joinError.message);
                 state.loading = false; render();
                 return;
             }
@@ -237,12 +200,11 @@
             state.gameStatus = 'playing';
             state.view = 'PLAYING';
             state.timeLeft = 120;
-            state.gameData = { height: 0, items: [], oxygen: 100 };
+            state.gameData = { height: 0 };
             nextQuestion();
             const timer = setInterval(() => {
                 state.timeLeft--;
-                if (state.selectedMode === 'submarine') state.gameData.oxygen -= 0.8;
-                if (state.timeLeft <= 0 || (state.selectedMode === 'submarine' && state.gameData.oxygen <= 0)) {
+                if (state.timeLeft <= 0) {
                     clearInterval(timer);
                     state.gameStatus = 'finished';
                 }
@@ -261,8 +223,6 @@
                 state.lastResult = 'correct';
                 let gain = 100;
                 if(state.selectedMode === 'tower') state.gameData.height += 1;
-                if(state.selectedMode === 'treasure') state.gameData.items.push('💎');
-                if(state.selectedMode === 'submarine') state.gameData.oxygen = Math.min(100, state.gameData.oxygen + 15);
                 
                 if (state.userRole === 'PLAYER') {
                     const current = state.players.find(x => x.id === state.playerId);
@@ -277,48 +237,21 @@
 
         function render() {
             const app = document.getElementById('app');
-            
             if (state.loading) {
-                app.innerHTML = `<div class="h-full flex items-center justify-center bg-black/50 backdrop-blur-sm z-[100] absolute inset-0 text-white flex-col gap-4">
+                app.innerHTML = `<div class="h-full flex items-center justify-center bg-black/50 absolute inset-0 text-white flex-col gap-4">
                     <div class="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <div class="text-2xl font-black">読み込み中...</div>
+                    <div class="text-2xl font-black text-white">通信中...</div>
                 </div>`;
                 return;
             }
 
             if (state.view === 'MAIN_MENU') {
                 app.innerHTML = `<div class="flex-1 flex flex-col items-center justify-center p-4">
-                    <h1 class="text-7xl font-black italic mb-8 drop-shadow-2xl text-white">Sahoot!</h1>
-                    <div class="flex flex-col gap-4 w-full max-w-xs">
+                    <h1 class="text-7xl font-black italic mb-8 drop-shadow-2xl">Sahoot!</h1>
+                    <div class="flex flex-col gap-4 w-full max-w-xs text-white">
                         <button onclick="state.userRole='PLAYER'; setView('ENTER_PIN')" class="bg-blue-600 p-6 rounded-2xl font-black text-2xl btn-fancy">参加する</button>
                         <button onclick="state.userRole='HOST'; setView('CONFIG')" class="bg-green-600 p-6 rounded-2xl font-black text-2xl btn-fancy">主催する</button>
                         <button onclick="state.userRole='SOLO'; setView('CONFIG')" class="bg-yellow-500 p-6 rounded-2xl font-black text-2xl btn-fancy">自習する</button>
-                    </div>
-                </div>`;
-            } else if (state.view === 'CONFIG') {
-                app.innerHTML = `<div class="flex-1 flex flex-col p-6 overflow-y-auto">
-                    <div class="bg-white text-black p-8 rounded-3xl shadow-2xl max-w-4xl mx-auto w-full">
-                        <h2 class="text-3xl font-black mb-6 border-b-4 border-gray-100 pb-2">1. 単元をえらぶ</h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
-                            ${Object.entries(topics).map(([id, t]) => `
-                                <div onclick="state.selectedTopic='${id}'; render();" class="p-3 border-4 rounded-xl cursor-pointer transition ${state.selectedTopic===id?'bg-indigo-600 text-white border-indigo-300':'border-gray-100 hover:border-indigo-200'}">
-                                    <span class="text-xl">${t.icon} ${t.name}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-
-                        <h2 class="text-3xl font-black mb-6 border-b-4 border-gray-100 pb-2">2. モードをえらぶ</h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                            ${Object.entries(modes).map(([id, m]) => `
-                                <div onclick="state.selectedMode='${id}'; render();" class="p-4 border-4 rounded-2xl cursor-pointer transition ${state.selectedMode===id?'bg-indigo-600 text-white border-indigo-300':'border-gray-100 hover:border-indigo-200'}">
-                                    <div class="text-2xl font-black mb-1">${m.icon} ${m.name}</div>
-                                    <div class="text-sm opacity-80">${m.desc}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-
-                        <button onclick="${state.userRole==='HOST'?'createHost()':'startGame()'}" class="w-full bg-black text-white py-6 rounded-3xl text-3xl font-black btn-fancy">スタート！</button>
-                        <button onclick="setView('MAIN_MENU')" class="w-full mt-4 text-gray-400 font-bold">もどる</button>
                     </div>
                 </div>`;
             } else if (state.view === 'ENTER_PIN') {
@@ -332,55 +265,55 @@
                     </div>
                 </div>`;
             } else if (state.view === 'LOBBY') {
-                app.innerHTML = `<div class="h-full flex flex-col items-center justify-center p-4">
+                app.innerHTML = `<div class="h-full flex flex-col items-center justify-center p-4 text-white">
                     <div class="bg-white text-black px-12 py-8 rounded-[40px] text-center mb-10 shadow-2xl">
-                        <div class="text-gray-400 font-bold uppercase tracking-widest text-sm mb-2">Game PIN</div>
-                        <div class="text-8xl font-black italic tracking-tighter">${state.gamePin}</div>
+                        <div class="text-gray-400 font-bold text-sm mb-2">Game PIN</div>
+                        <div class="text-8xl font-black italic">${state.gamePin}</div>
                     </div>
                     <div class="flex flex-wrap gap-4 mb-12 justify-center max-w-2xl min-h-[100px]">
                         ${state.players.length === 0 ? '<div class="text-2xl font-black opacity-30 animate-pulse">待機中...</div>' : state.players.map(p => `<div class="bg-white/20 px-8 py-3 rounded-full font-black text-2xl border border-white/40 shadow-xl">${p.nickname}</div>`).join('')}
                     </div>
-                    ${state.userRole==='HOST' ? `<button onclick="startByHost()" class="bg-green-500 px-16 py-5 rounded-3xl text-4xl font-black btn-fancy">開始！</button>` : `<div class="text-2xl font-bold animate-bounce">ホストが開始するのを待ってね</div>`}
+                    ${state.userRole==='HOST' ? `<button onclick="startByHost()" class="bg-green-500 px-16 py-5 rounded-3xl text-4xl font-black btn-fancy">開始！</button>` : `<div class="text-2xl font-bold animate-bounce text-white">ホストが開始するのを待ってね</div>`}
+                </div>`;
+            } else if (state.view === 'CONFIG') {
+                app.innerHTML = `<div class="flex-1 flex flex-col p-6 overflow-y-auto">
+                    <div class="bg-white text-black p-8 rounded-3xl shadow-2xl max-w-4xl mx-auto w-full">
+                        <h2 class="text-3xl font-black mb-6 border-b-4 border-gray-100 pb-2">単元とモードをえらぶ</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
+                            ${Object.entries(topics).map(([id, t]) => `
+                                <div onclick="state.selectedTopic='${id}'; render();" class="p-3 border-4 rounded-xl cursor-pointer transition ${state.selectedTopic===id?'bg-indigo-600 text-white border-indigo-300':'border-gray-100 hover:border-indigo-200'}">
+                                    <span class="text-xl">${t.icon} ${t.name}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button onclick="${state.userRole==='HOST'?'createHost()':'startGame()'}" class="w-full bg-black text-white py-6 rounded-3xl text-3xl font-black btn-fancy">スタート！</button>
+                    </div>
                 </div>`;
             } else if (state.view === 'PLAYING') {
                 if (state.gameStatus === 'finished') {
-                    app.innerHTML = `<div class="h-full flex flex-col items-center justify-center p-8 bg-black/80">
+                    app.innerHTML = `<div class="h-full flex flex-col items-center justify-center p-8 bg-black/80 text-white">
                         <h2 class="text-7xl font-black text-yellow-400 italic mb-8">FINISH!</h2>
                         <div class="bg-white text-black p-10 rounded-3xl text-center shadow-2xl w-full max-w-sm">
-                            <div class="text-xl font-bold opacity-50 mb-2">最終スコア</div>
-                            <div class="text-7xl font-black">${state.userRole==='PLAYER'?(state.players.find(x=>x.id===state.playerId)?.score || 0):state.soloScore}</div>
-                            <button onclick="location.reload()" class="mt-8 bg-purple-900 text-white px-8 py-4 rounded-2xl font-black text-xl w-full">もう一度あそぶ</button>
-                        </div>
-                    </div>`;
-                } else if (state.userRole === 'HOST') {
-                    const sorted = [...state.players].sort((a,b) => b.score - a.score);
-                    app.innerHTML = `<div class="h-full flex flex-col p-8 gap-6 ${state.selectedMode==='tower'?'theme-tower':state.selectedMode==='treasure'?'theme-treasure':state.selectedMode==='submarine'?'theme-submarine':''}">
-                        <div class="flex justify-between items-end">
-                            <h2 class="text-4xl font-black uppercase italic">${modes[state.selectedMode].name}</h2>
-                            <div class="text-5xl font-black bg-black/40 px-6 py-2 rounded-2xl tabular-nums">${state.timeLeft}s</div>
-                        </div>
-                        <div class="flex-1 grid grid-cols-1 gap-4 overflow-y-auto pr-4">
-                            ${sorted.map((p,i)=>`<div class="flex justify-between items-center bg-white/10 backdrop-blur-md p-6 rounded-2xl border-l-8 ${i===0?'border-yellow-400':'border-white/20'}">
-                                <span class="text-3xl font-black">${i+1}. ${p.nickname}</span>
-                                <span class="text-3xl font-black">${p.score}</span>
-                            </div>`).join('')}
+                            <div class="text-xl font-bold opacity-50 mb-2 text-gray-500">最終スコア</div>
+                            <div class="text-7xl font-black text-purple-900">${state.userRole==='PLAYER'?(state.players.find(x=>x.id===state.playerId)?.score || 0):state.soloScore}</div>
+                            <button onclick="location.reload()" class="mt-8 bg-purple-900 text-white px-8 py-4 rounded-2xl font-black text-xl w-full">もどる</button>
                         </div>
                     </div>`;
                 } else {
-                    app.innerHTML = `<div class="h-full flex flex-col p-4 gap-4 ${state.selectedMode==='tower'?'theme-tower':state.selectedMode==='treasure'?'theme-treasure':state.selectedMode==='submarine'?'theme-submarine':''}">
+                    app.innerHTML = `<div class="h-full flex flex-col p-4 gap-4 text-white">
                         <div class="flex justify-between items-center text-sm font-bold bg-black/20 p-3 rounded-xl">
-                            <div>${state.gameData.height > 0 ? '🏰 塔の高さ: ' + state.gameData.height : ''} ${state.gameData.items.length > 0 ? '💎 お宝: ' + state.gameData.items.length : ''}</div>
-                            <div class="${state.gameData.oxygen < 30 ? 'text-red-400 animate-pulse':''}">${state.selectedMode==='submarine'?'⚓ 酸素: '+Math.floor(state.gameData.oxygen)+'%':''}</div>
+                            <div>${state.gameData.height > 0 ? '🏰 塔の高さ: ' + state.gameData.height : ''}</div>
+                            <div class="text-xl font-black">${state.timeLeft}s</div>
                         </div>
-                        <div class="bg-white text-purple-900 rounded-[32px] flex-1 flex items-center justify-center text-5xl font-black shadow-2xl p-6 text-center leading-tight">
+                        <div class="bg-white text-purple-900 rounded-[32px] flex-1 flex items-center justify-center text-5xl font-black shadow-2xl p-6 text-center">
                             ${state.currentQuestion?.q || ''}
                         </div>
                         <div class="grid grid-cols-2 gap-4 h-[45%]">
-                            ${state.currentQuestion?.opts.map((o, i) => `<button onclick="handleAnswer(${o})" class="${['bg-answer-red','bg-answer-blue','bg-answer-yellow','bg-answer-green'][i]} rounded-3xl text-4xl font-black btn-fancy border-black/20">${o}</button>`).join('')}
+                            ${state.currentQuestion?.opts.map((o, i) => `<button onclick="handleAnswer(${o})" class="${['bg-answer-red','bg-answer-blue','bg-answer-yellow','bg-answer-green'][i]} rounded-3xl text-4xl font-black btn-fancy border-black/20 text-white">${o}</button>`).join('')}
                         </div>
-                        ${state.lastResult ? `<div class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-50 animate-in zoom-in duration-150">
+                        ${state.lastResult ? `<div class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-50">
                             <div class="text-9xl mb-4">${state.lastResult==='correct'?'✨':'💥'}</div>
-                            <div class="text-5xl font-black">${state.lastResult==='correct'?'正解！':'まちがい'}</div>
+                            <div class="text-5xl font-black text-white">${state.lastResult==='correct'?'正解！':'まちがい'}</div>
                         </div>` : ''}
                     </div>`;
                 }
