@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sahoot! Plus - 算数バトル</title>
+    <title>Sahoot! Plus - Powered by Supabase</title>
     <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
+    <!-- Supabase JS Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Nunito', 'Noto Sans JP', sans-serif; overflow: hidden; background: #46178f; color: white; }
@@ -18,41 +17,50 @@
         }
         @keyframes bgScroll { from { background-position: 0 0; } to { background-position: 1000px 1000px; } }
         
-        .sea-bg { background: linear-gradient(180deg, #0077be 0%, #001a33 100%); }
-        .cave-bg { background: linear-gradient(180deg, #4b3621 0%, #21130d 100%); }
-
         .btn-fancy { transition: all 0.2s; border-bottom: 6px solid rgba(0,0,0,0.3); position: relative; }
         .btn-fancy:active { transform: translateY(4px); border-bottom-width: 2px; }
-        
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 10px; }
     </style>
 </head>
 <body class="h-full kahoot-bg">
     <div id="app" class="h-full flex flex-col"></div>
 
     <script>
-        // --- Firebase Setup ---
-        const firebaseConfig = JSON.parse(__firebase_config);
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sahoot-plus-v2';
-
-        let user = null;
-        async function initAuth() {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await auth.signInWithCustomToken(__initial_auth_token);
-            } else {
-                await auth.signInAnonymously();
+        // --- Supabase Client Initialization ---
+        // 提供されたURLとキーを直接セット
+        const sbUrl = "https://hqldwfllnqmjcwqgrpjb.supabase.co"; 
+        const sbKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxbGR3ZmxsbnFtamN3cWdycGpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMzgzNzksImV4cCI6MjA5MTkxNDM3OX0.WIA3aiAXdN7sZStu_RPMwFLjp2Y8zbbI-vJFa-PIxkI";
+        
+        const supabaseClient = supabase.createClient(sbUrl, sbKey);
+        
+        // --- Game Logic Constants ---
+        const topics = {
+            '1年生': { 
+                g1_plus: { name: 'あわせていくつ', icon: '➕' }, 
+                g1_minus: { name: 'のこりはいくつ', icon: '➖' } 
+            },
+            '2年生': { 
+                g2_kuku: { name: 'かけ算九九', icon: '✖️' }, 
+                g2_hyaku: { name: '100より大きい数', icon: '🔟' } 
+            },
+            '3年生': { 
+                g3_div: { name: 'わり算', icon: '➗' }, 
+                g3_frac: { name: '分数・小数', icon: '🍰' } 
+            },
+            '4年生': {
+                g4_area: { name: '面積', icon: '📐' },
+                g4_angle: { name: '角の大きさ', icon: '📏' }
+            },
+            '5年生': {
+                g5_ratio: { name: '割合', icon: '📊' },
+                g5_vol: { name: '体積', icon: '🧊' }
+            },
+            '6年生': {
+                g6_speed: { name: '速さ', icon: '🏃' },
+                g6_circle: { name: '円の面積', icon: '🎯' }
             }
-            user = auth.currentUser;
-            render();
-        }
-        initAuth();
+        };
 
-        // --- Game State ---
+        // --- State ---
         let state = {
             view: 'MAIN_MENU',
             userRole: null,
@@ -62,170 +70,168 @@
             currentQuestion: null,
             score: 0,
             timeLeft: 60,
-            timerInterval: null,
-            gameStatus: 'waiting',
-            lastResult: null,
             selectedTopic: 'g1_plus',
-            selectedMode: 'submarine',
-            correctStreak: 0,
-            depth: 0,
-            loading: false
+            loading: false,
+            lastResult: null,
+            gameStatus: 'waiting',
+            playerId: null
         };
 
-        const modes = {
-            submarine: { name: 'サブマリン', desc: '深海へ潜れ！計算で深度を稼げ！', icon: '🚢', bg: 'sea-bg' },
-            treasure: { name: 'たからばこ', desc: 'コンボを繋いでお宝をゲット！', icon: '💎', bg: 'cave-bg' }
-        };
-
-        const topics = {
-            '1年生': {
-                g1_plus: { name: 'あわせていくつ', icon: '➕' },
-                g1_minus: { name: 'のこりはいくつ', icon: '➖' },
-                g1_clock: { name: 'なんじなんぷん', icon: '⏰' }
-            },
-            '2年生': {
-                g2_kuku: { name: 'かけ算九九', icon: '✖️' },
-                g2_length: { name: '長さ(cm, mm)', icon: '📏' },
-                g2_box: { name: 'はこのかたち', icon: '📦' }
-            },
-            '3年生': {
-                g3_div: { name: 'わり算', icon: '➗' },
-                g3_frac: { name: '分数・小数', icon: '🍰' },
-                g3_weight: { name: '重さ(g, kg)', icon: '⚖️' }
-            },
-            '4年生': {
-                g4_big: { name: '大きな数', icon: '🌌' },
-                g4_area: { name: '面積(㎠, ㎡)', icon: '🗺️' },
-                g4_angle: { name: '角の大きさ', icon: '📐' }
-            },
-            '5年生': {
-                g5_odd: { name: '奇数と偶数', icon: '🔢' },
-                g5_vol: { name: '体積(㎤)', icon: '🧊' },
-                g5_ratio: { name: '割合(%)', icon: '📊' }
-            },
-            '6年生': {
-                g6_circle: { name: '円の面積', icon: '🎯' },
-                g6_speed: { name: '速さ・時間・距離', icon: '🏃' },
-                g6_ratio2: { name: '比と比の値', icon: '⚖️' }
-            }
-        };
-
-        // --- Question Generator ---
-        function generateProblem(topicId) {
-            let q = "", a = 0, opts = [];
-            const ri = (max, min=1) => Math.floor(Math.random() * (max - min + 1)) + min;
-            
-            switch(topicId) {
-                // 1年生
-                case 'g1_plus': { let n1=ri(9), n2=ri(9); q=`${n1} ＋ ${n2} は？`; a=n1+n2; break; }
-                case 'g1_minus': { let n1=ri(15,6), n2=ri(5); q=`${n1} － ${n2} は？`; a=n1-n2; break; }
-                case 'g1_clock': { let h=ri(12), m=ri(11)*5; q=`短針が${h}、長針が${m}分。何時何分？`; a=`${h}時${m}分`; break; }
-                // 2年生
-                case 'g2_kuku': { let n1=ri(9,2), n2=ri(9,2); q=`${n1} × ${n2} は？`; a=n1*n2; break; }
-                case 'g2_length': { let cm=ri(10), mm=ri(9); q=`${cm}cm ${mm}mm は 何mm？`; a=cm*10+mm; break; }
-                case 'g2_box': { q=`立方体の「かど（頂点）」の数は？`; a=8; break; }
-                // 3年生
-                case 'g3_div': { let n2=ri(9,2), a_val=ri(9,2); q=`${n2*a_val} ÷ ${n2} は？`; a=a_val; break; }
-                case 'g3_frac': { let d=ri(5,2); q=`1を${d}等分した1つ分は？`; a=`1/${d}`; break; }
-                case 'g3_weight': { let kg=ri(5); q=`${kg}kg は 何g？`; a=kg*1000; break; }
-                // 4年生
-                case 'g4_big': { let n=ri(9); q=`1000万を${n}個あつめた数は？`; a=`${n}000万`; break; }
-                case 'g4_area': { let s=ri(15,2); q=`一辺が${s}cmの正方形の面積は？`; a=s*s; break; }
-                case 'g4_angle': { q=`直角は何度？`; a=90; break; }
-                // 5年生
-                case 'g5_odd': { let n=ri(100); q=`${n} は 奇数？偶数？`; a=(n%2===0)?'偶数':'奇数'; break; }
-                case 'g5_vol': { let w=ri(5), h=ri(5), d=ri(5); q=`縦${w}cm,横${h}cm,高さ${d}cmの直方体の体積は？`; a=w*h*d; break; }
-                case 'g5_ratio': { let b=ri(100,20); q=`${b}円の20%はいくら？`; a=Math.floor(b*0.2); break; }
-                // 6年生
-                case 'g6_circle': { let r=ri(10); q=`半径${r}cmの円の面積は？\n(円周率3.14)`; a=parseFloat((r*r*3.14).toFixed(2)); break; }
-                case 'g6_speed': { let d=ri(10)*12, t=ri(4); q=`${d}kmを${t}時間で進む速さは時速何km？`; a=d/t; break; }
-                case 'g6_ratio2': { let n1=ri(5), n2=ri(5); q=`${n1*2}：${n2*2} を簡単な比にすると？`; a=`${n1}：${n2}`; break; }
-                default: { q="1 + 1"; a=2; }
-            }
-
-            opts = [a];
-            while(opts.length < 4) {
-                let f;
-                if (typeof a === 'number') {
-                    f = Math.round(a + (Math.random()*20-10));
-                    if (f < 0) f = Math.abs(f);
-                } else if (typeof a === 'string' && a.includes('/')) {
-                    f = `1/${ri(10,2)}`;
-                } else if (typeof a === 'string' && a.includes('：')) {
-                    f = `${ri(5)}：${ri(5)}`;
-                } else {
-                    f = "ダミー";
-                }
-                if (!opts.includes(f)) opts.push(f);
-            }
-            return { q, a, opts: opts.sort(() => Math.random()-0.5) };
-        }
-
-        // --- View Actions ---
-        function setView(v) { state.view = v; render(); }
-
+        // --- Supabase Actions ---
         async function createHost() {
-            if (!user) return;
             state.loading = true; render();
             const pin = Math.floor(100000 + Math.random() * 899999).toString();
             state.gamePin = pin;
-            await db.doc(`/artifacts/${appId}/public/data/lobbies/${pin}`).set({
-                pin, status: 'waiting', topic: state.selectedTopic, mode: state.selectedMode, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            state.loading = false; setView('LOBBY');
-            pollPlayers();
+
+            const { error } = await supabaseClient
+                .from('game_lobbies')
+                .insert([{ 
+                    game_pin: pin, 
+                    status: 'waiting', 
+                    topic: state.selectedTopic,
+                    grade: "全学年"
+                }]);
+
+            if (error) { 
+                console.error(error); 
+                alert("部屋の作成に失敗しました。SQLが正しく実行されているか確認してください。");
+                state.loading = false; render(); 
+                return; 
+            }
+
+            subscribeToPlayers(pin);
+            state.loading = false;
+            setView('LOBBY');
         }
 
         async function joinGame() {
             const pin = document.getElementById('pinInput').value.trim();
             const nick = document.getElementById('nickInput').value.trim();
-            if (!pin || !nick) return;
+            if (!pin || !nick) return alert("PINとなまえを入れてね！");
+
             state.loading = true; render();
-            const lobbyDoc = await db.doc(`/artifacts/${appId}/public/data/lobbies/${pin}`).get();
-            if (!lobbyDoc.exists) { alert("PINが無効です"); state.loading = false; render(); return; }
-            await db.doc(`/artifacts/${appId}/public/data/lobbies/${pin}/players/${user.uid}`).set({ nickname: nick, score: 0, uid: user.uid });
-            state.gamePin = pin; state.nickname = nick;
-            state.selectedMode = lobbyDoc.data().mode; state.selectedTopic = lobbyDoc.data().topic;
-            state.loading = false; setView('LOBBY');
-            pollLobbyStatus();
+
+            const { data: lobby, error: lError } = await supabaseClient
+                .from('game_lobbies')
+                .select('*')
+                .eq('game_pin', pin)
+                .maybeSingle();
+
+            if (lError || !lobby) { 
+                alert("PINが見つかりません。番号が合っているか確認してね！"); 
+                state.loading = false; render(); 
+                return; 
+            }
+
+            const { data: player, error: pError } = await supabaseClient
+                .from('players')
+                .insert([{ game_pin: pin, nickname: nick, score: 0 }])
+                .select()
+                .single();
+
+            if (pError) { 
+                console.error(pError); 
+                alert("参加に失敗しました。");
+                state.loading = false; render(); 
+                return; 
+            }
+
+            state.gamePin = pin;
+            state.nickname = nick;
+            state.playerId = player.id;
+            state.selectedTopic = lobby.topic || 'g1_plus';
+
+            subscribeToLobby(pin);
+            fetchPlayers(pin);
+            state.loading = false;
+            setView('LOBBY');
         }
 
-        function pollPlayers() {
-            if (state.view !== 'LOBBY' || state.userRole !== 'HOST') return;
-            db.collection(`/artifacts/${appId}/public/data/lobbies/${state.gamePin}/players`).get().then(snap => {
-                state.players = snap.docs.map(d => d.data());
+        function subscribeToPlayers(pin) {
+            supabaseClient
+                .channel('player_join')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `game_pin=eq.${pin}` }, () => {
+                    fetchPlayers(pin);
+                })
+                .subscribe();
+            fetchPlayers(pin);
+        }
+
+        async function fetchPlayers(pin) {
+            const { data } = await supabaseClient.from('players').select('*').eq('game_pin', pin);
+            if (data) {
+                state.players = data;
                 render();
-                setTimeout(pollPlayers, 3000);
-            });
+            }
         }
 
-        function pollLobbyStatus() {
-            if (state.view !== 'LOBBY' || state.userRole !== 'PLAYER') return;
-            db.doc(`/artifacts/${appId}/public/data/lobbies/${state.gamePin}`).get().then(doc => {
-                if (doc.exists && doc.data().status === 'playing') startGame();
-                else setTimeout(pollLobbyStatus, 3000);
-            });
+        function subscribeToLobby(pin) {
+            supabaseClient
+                .channel('lobby_status')
+                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_lobbies', filter: `game_pin=eq.${pin}` }, payload => {
+                    if (payload.new.status === 'playing') startGame();
+                })
+                .subscribe();
         }
 
         async function startByHost() {
-            await db.doc(`/artifacts/${appId}/public/data/lobbies/${state.gamePin}`).update({ status: 'playing' });
+            await supabaseClient
+                .from('game_lobbies')
+                .update({ status: 'playing' })
+                .eq('game_pin', state.gamePin);
             startGame();
         }
 
-        function startGame() {
-            state.view = 'PLAYING'; state.gameStatus = 'playing'; state.timeLeft = 60; state.score = 0; state.depth = 0; state.correctStreak = 0;
-            nextQuestion();
-            state.timerInterval = setInterval(() => {
-                state.timeLeft--;
-                if (state.timeLeft <= 0) { clearInterval(state.timerInterval); state.gameStatus = 'finished'; saveFinalScore(); }
-                render();
-            }, 1000);
-            render();
+        // --- Common Logic ---
+        function setView(v) { state.view = v; render(); }
+
+        function generateProblem(topicId) {
+            const ri = (max, min=1) => Math.floor(Math.random() * (max - min + 1)) + min;
+            let q = "1+1", a = 2;
+            
+            if (topicId === 'g1_plus') { 
+                let n1=ri(9), n2=ri(9); q=`${n1} ＋ ${n2}`; a=n1+n2; 
+            } else if (topicId === 'g1_minus') {
+                let n1=ri(10, 5), n2=ri(4); q=`${n1} － ${n2}`; a=n1-n2;
+            } else if (topicId === 'g2_kuku') { 
+                let n1=ri(9,2), n2=ri(9,2); q=`${n1} × ${n2}`; a=n1*n2; 
+            } else if (topicId === 'g3_div') {
+                let n2=ri(9,2), ans=ri(9,1); q=`${n2*ans} ÷ ${n2}`; a=ans;
+            } else {
+                let n1=ri(50), n2=ri(50); q=`${n1} ＋ ${n2}`; a=n1+n2;
+            }
+            
+            let opts = [a];
+            while(opts.length < 4) {
+                let f = a + ri(10, -10);
+                if (!opts.includes(f) && f >= 0) opts.push(f);
+            }
+            return { q, a, opts: opts.sort(() => Math.random()-0.5) };
         }
 
-        async function saveFinalScore() {
-            if (state.userRole === 'SOLO' || !user || !state.gamePin) return;
-            await db.doc(`/artifacts/${appId}/public/data/lobbies/${state.gamePin}/players/${user.uid}`).update({ score: state.score, depth: state.depth });
+        function startGame() {
+            state.view = 'PLAYING';
+            state.timeLeft = 60;
+            state.score = 0;
+            state.gameStatus = 'playing';
+            nextQuestion();
+            const timer = setInterval(() => {
+                state.timeLeft--;
+                if (state.timeLeft <= 0) {
+                    clearInterval(timer);
+                    state.gameStatus = 'finished';
+                    updateFinalScore();
+                }
+                render();
+            }, 1000);
+        }
+
+        async function updateFinalScore() {
+            if (state.userRole === 'SOLO' || !state.playerId) return;
+            await supabaseClient
+                .from('players')
+                .update({ score: state.score })
+                .eq('id', state.playerId);
         }
 
         function nextQuestion() {
@@ -233,139 +239,139 @@
             render();
         }
 
-        function handleAnswer(val) {
-            if (state.lastResult || state.gameStatus === 'finished') return;
+        async function handleAnswer(val) {
+            if (state.lastResult) return;
             const isCorrect = val.toString() === state.currentQuestion.a.toString();
             if (isCorrect) {
-                state.lastResult = 'correct'; state.correctStreak++;
-                state.score += 100 + (state.correctStreak * 10);
-                if (state.selectedMode === 'submarine') state.depth += 10 + state.correctStreak;
+                state.score += 100;
+                state.lastResult = 'correct';
+                // リアルタイムランキング更新（任意）
+                if (state.playerId) {
+                    supabaseClient.from('players').update({ score: state.score }).eq('id', state.playerId).then();
+                }
             } else {
-                state.lastResult = 'wrong'; state.correctStreak = 0;
+                state.lastResult = 'wrong';
             }
             render();
-            setTimeout(() => { state.lastResult = null; nextQuestion(); }, 800);
+            setTimeout(() => { 
+                state.lastResult = null; 
+                if (state.gameStatus !== 'finished') nextQuestion(); 
+            }, 600);
         }
 
-        // --- Render Logic ---
+        // --- UI Rendering ---
         function render() {
             const app = document.getElementById('app');
-            const currentMode = modes[state.selectedMode] || modes.submarine;
-            const bgClass = (state.view === 'PLAYING') ? currentMode.bg : 'kahoot-bg';
-            document.body.className = 'h-full ' + bgClass;
-
             if (state.loading) {
-                app.innerHTML = `<div class="h-full flex flex-col items-center justify-center"><div class="animate-spin text-6xl mb-4">🌀</div><div class="text-2xl font-black">準備中...</div></div>`;
+                app.innerHTML = `<div class="h-full flex items-center justify-center font-black text-2xl animate-pulse">通信中...</div>`;
                 return;
             }
 
             if (state.view === 'MAIN_MENU') {
                 app.innerHTML = `
                 <div class="flex-1 flex flex-col items-center justify-center p-4">
-                    <h1 class="text-7xl font-black italic mb-12 drop-shadow-2xl">Sahoot! Plus</h1>
-                    <div class="flex flex-col gap-4 w-full max-w-sm">
-                        <button onclick="state.userRole='PLAYER'; setView('ENTER_PIN')" class="bg-blue-600 p-6 rounded-3xl font-black text-2xl btn-fancy">参加する</button>
-                        <button onclick="state.userRole='HOST'; setView('CONFIG')" class="bg-green-600 p-6 rounded-3xl font-black text-2xl btn-fancy">主催する</button>
-                        <button onclick="state.userRole='SOLO'; setView('CONFIG')" class="bg-yellow-500 p-6 rounded-3xl font-black text-2xl btn-fancy text-black">ひとりで練習</button>
+                    <h1 class="text-6xl font-black italic mb-10 drop-shadow-lg">Sahoot!</h1>
+                    <div class="flex flex-col gap-4 w-full max-w-xs">
+                        <button onclick="state.userRole='PLAYER'; setView('ENTER_PIN')" class="bg-blue-600 p-5 rounded-2xl font-black text-xl btn-fancy shadow-xl">参加する</button>
+                        <button onclick="state.userRole='HOST'; setView('CONFIG')" class="bg-green-600 p-5 rounded-2xl font-black text-xl btn-fancy shadow-xl">主催する</button>
+                        <button onclick="state.userRole='SOLO'; setView('CONFIG')" class="bg-yellow-500 p-5 rounded-2xl font-black text-xl btn-fancy text-black shadow-xl">ひとりで練習</button>
                     </div>
                 </div>`;
             } else if (state.view === 'CONFIG') {
                 app.innerHTML = `
                 <div class="flex-1 p-6 bg-white text-black rounded-t-[3rem] mt-10 overflow-y-auto">
-                    <h2 class="text-2xl font-black mb-4">ゲーム設定</h2>
-                    <div class="mb-6">
-                        <label class="text-xs font-bold text-gray-400 uppercase tracking-widest">モード</label>
-                        <div class="grid grid-cols-2 gap-2 mt-2">
-                            ${Object.entries(modes).map(([id, m]) => `
-                                <div onclick="state.selectedMode='${id}'; render()" class="p-3 border-2 rounded-2xl cursor-pointer ${state.selectedMode===id?'border-blue-600 bg-blue-50':'border-gray-100'}">
-                                    <div class="text-2xl">${m.icon}</div>
-                                    <div class="font-black text-sm">${m.name}</div>
+                    <h2 class="text-2xl font-black mb-4">単元をえらぼう</h2>
+                    <div class="mb-6 space-y-4">
+                        ${Object.entries(topics).map(([grade, items]) => `
+                            <div>
+                                <div class="text-sm font-bold text-purple-600 mb-1 border-b">${grade}</div>
+                                <div class="grid grid-cols-1 gap-2">
+                                    ${Object.entries(items).map(([id, t]) => `
+                                        <div onclick="state.selectedTopic='${id}'; render()" class="p-3 border-2 rounded-xl cursor-pointer flex items-center gap-3 ${state.selectedTopic===id?'bg-purple-600 text-white border-purple-600 shadow-inner':'bg-gray-50 border-gray-100'}">
+                                            <span class="text-xl">${t.icon}</span>
+                                            <span class="font-bold">${t.name}</span>
+                                        </div>
+                                    `).join('')}
                                 </div>
-                            `).join('')}
-                        </div>
+                            </div>
+                        `).join('')}
                     </div>
-                    <div class="mb-8">
-                        <label class="text-xs font-bold text-gray-400 uppercase tracking-widest">学年と単元</label>
-                        <div class="mt-2 space-y-4">
-                            ${Object.entries(topics).map(([grade, items]) => `
-                                <div>
-                                    <div class="text-sm font-black text-purple-600 mb-2">${grade}</div>
-                                    <div class="grid grid-cols-1 gap-2">
-                                        ${Object.entries(items).map(([id, t]) => `
-                                            <div onclick="state.selectedTopic='${id}'; render()" class="p-3 border-2 rounded-xl flex items-center gap-3 cursor-pointer ${state.selectedTopic===id?'bg-purple-600 text-white border-purple-600':'bg-gray-50 border-gray-100'}">
-                                                <span>${t.icon}</span> <span class="font-bold text-sm">${t.name}</span>
-                                            </div>
-                                        `).join('')}
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    <button onclick="${state.userRole==='HOST'?'createHost()':'startGame()'}" class="w-full bg-black text-white py-5 rounded-2xl text-2xl font-black btn-fancy">スタート！</button>
-                    <button onclick="setView('MAIN_MENU')" class="w-full mt-4 text-gray-400 font-bold text-sm">戻る</button>
+                    <button onclick="${state.userRole==='SOLO'?'startGame()':'createHost()'}" class="w-full bg-black text-white py-4 rounded-2xl font-black text-xl btn-fancy">
+                        ${state.userRole==='SOLO'?'スタート！':'部屋を作る'}
+                    </button>
+                    <button onclick="setView('MAIN_MENU')" class="w-full mt-4 text-gray-400 font-bold">戻る</button>
                 </div>`;
             } else if (state.view === 'ENTER_PIN') {
                 app.innerHTML = `
-                <div class="flex-1 flex flex-col items-center justify-center p-6">
-                    <div class="bg-white p-8 rounded-[3rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 text-black text-center">
-                        <h2 class="font-black text-2xl">入室</h2>
+                <div class="flex-1 flex flex-col items-center justify-center p-6 text-black">
+                    <div class="bg-white p-8 rounded-[3rem] w-full max-w-sm flex flex-col gap-4 shadow-2xl">
+                        <h2 class="text-center font-black text-2xl">ゲームに参加</h2>
                         <input id="pinInput" type="number" placeholder="PIN" class="p-4 bg-gray-100 rounded-xl text-center text-3xl font-black">
-                        <input id="nickInput" type="text" placeholder="名前" class="p-4 bg-gray-100 rounded-xl text-center text-lg font-bold">
-                        <button onclick="joinGame()" class="bg-blue-600 text-white py-5 rounded-xl text-2xl font-black btn-fancy">GO!</button>
-                        <button onclick="setView('MAIN_MENU')" class="text-gray-400 font-bold">戻る</button>
+                        <input id="nickInput" type="text" placeholder="なまえ" class="p-4 bg-gray-100 rounded-xl text-center font-bold">
+                        <button onclick="joinGame()" class="bg-blue-600 text-white py-4 rounded-xl font-black text-xl btn-fancy">GO!</button>
+                        <button onclick="setView('MAIN_MENU')" class="text-gray-400 font-bold">キャンセル</button>
                     </div>
                 </div>`;
             } else if (state.view === 'LOBBY') {
                 app.innerHTML = `
                 <div class="h-full flex flex-col items-center justify-center p-6 text-center">
-                    <div class="text-xs font-bold opacity-60 mb-2 uppercase tracking-[0.3em]">Game PIN</div>
+                    <div class="text-sm opacity-60 font-bold">Game PIN</div>
                     <div class="text-8xl font-black mb-10 italic">${state.gamePin}</div>
-                    <div class="flex flex-wrap justify-center gap-2 mb-10">
-                        ${state.players.length === 0 ? '<div class="text-xl animate-pulse">参加者を待っています...</div>' : state.players.map(p => `<div class="bg-white/20 px-4 py-1 rounded-full font-bold text-sm">${p.nickname}</div>`).join('')}
+                    <div class="text-sm font-bold mb-4">参加メンバー (${state.players.length})</div>
+                    <div class="flex flex-wrap justify-center gap-2 mb-10 max-w-md">
+                        ${state.players.map(p => `<div class="bg-white/20 px-4 py-1 rounded-full font-bold shadow-sm">${p.nickname}</div>`).join('')}
+                        ${state.players.length === 0 ? '<div class="animate-pulse">待機中...</div>' : ''}
                     </div>
-                    ${state.userRole==='HOST'?`<button onclick="startByHost()" class="bg-green-500 px-12 py-5 rounded-2xl text-2xl font-black btn-fancy">全員揃った！</button>`:'<div class="font-black animate-bounce">ホストの開始を待機中...</div>'}
+                    ${state.userRole==='HOST'?`<button onclick="startByHost()" class="bg-green-500 px-12 py-5 rounded-2xl font-black text-2xl btn-fancy shadow-lg">開始！</button>`:'<div class="font-bold">ホストが開始するのを待っています...</div>'}
                 </div>`;
             } else if (state.view === 'PLAYING') {
                 if (state.gameStatus === 'finished') {
-                    app.innerHTML = `
-                    <div class="h-full flex flex-col items-center justify-center p-10 bg-black/80 text-center">
-                        <h2 class="text-6xl font-black mb-6 text-yellow-400 italic">終了！</h2>
-                        <div class="text-3xl font-black mb-10 bg-white/10 p-8 rounded-[2rem] border-2 border-white/20">
-                            ${state.selectedMode==='submarine'?'到達深度: '+state.depth+'m':'スコア: '+state.score}
+                    const sorted = [...state.players].sort((a,b) => b.score - a.score);
+                    app.innerHTML = `<div class="h-full flex flex-col items-center justify-center p-10 text-center bg-black/40 backdrop-blur-sm">
+                        <h2 class="text-5xl font-black mb-6 text-yellow-400">結果発表</h2>
+                        <div class="w-full max-w-sm space-y-2 mb-8">
+                            ${state.userRole !== 'SOLO' ? sorted.map((p, i) => `
+                                <div class="flex justify-between bg-white/10 p-4 rounded-xl ${i===0?'border-2 border-yellow-400 bg-white/20':''}">
+                                    <span class="font-bold">${i+1}. ${p.nickname}</span>
+                                    <span class="font-black">${p.score}</span>
+                                </div>
+                            `).join('') : `
+                                <div class="text-3xl font-bold bg-white/20 p-8 rounded-[2rem]">
+                                    スコア: <span class="text-yellow-300 font-black">${state.score}</span>
+                                </div>
+                            `}
                         </div>
-                        <button onclick="location.reload()" class="bg-white text-black px-10 py-3 rounded-full font-black text-xl shadow-xl">もう一度！</button>
+                        <button onclick="location.reload()" class="bg-white text-black px-12 py-4 rounded-full font-black text-xl shadow-2xl">トップへ戻る</button>
                     </div>`;
                 } else {
                     app.innerHTML = `
                     <div class="h-full flex flex-col p-4">
-                        <div class="flex justify-between items-center bg-black/30 p-3 rounded-2xl mb-4 border border-white/10">
-                            <div class="leading-none">
-                                <span class="text-[10px] opacity-60 block">RESULT</span>
-                                <span class="text-xl font-black text-yellow-400">${state.selectedMode==='submarine'?state.depth+'m':state.score}</span>
+                        <div class="flex justify-between items-end mb-4">
+                            <div class="bg-black/30 px-4 py-2 rounded-xl">
+                                <div class="text-[10px] font-bold opacity-60 uppercase">SCORE</div>
+                                <div class="text-2xl font-black text-yellow-400">${state.score}</div>
                             </div>
-                            <div class="text-2xl font-black bg-white/20 px-6 py-1 rounded-full tabular-nums">${state.timeLeft}</div>
+                            <div class="text-3xl font-black bg-white/20 px-6 py-2 rounded-full tabular-nums">${state.timeLeft}</div>
                         </div>
-                        
-                        <div class="bg-white text-purple-900 rounded-[2.5rem] flex-1 flex flex-col items-center justify-center text-3xl font-black p-6 mb-6 text-center shadow-2xl relative overflow-hidden">
-                            <div class="whitespace-pre-line">${state.currentQuestion?.q}</div>
-                            ${state.correctStreak > 1 ? `<div class="absolute top-2 right-4 text-sm text-purple-200">${state.correctStreak} COMBO</div>` : ''}
+                        <div class="bg-white text-purple-900 rounded-[3rem] flex-1 flex flex-col items-center justify-center p-6 mb-6 text-center shadow-2xl relative">
+                            <div class="text-5xl font-black">${state.currentQuestion ? state.currentQuestion.q : ''}</div>
                         </div>
-
-                        <div class="grid grid-cols-2 gap-3 h-[40%]">
-                            ${state.currentQuestion?.opts.map((o, i) => `
-                                <button onclick="handleAnswer('${o}')" class="${['bg-red-500','bg-blue-500','bg-yellow-500','bg-green-500'][i]} rounded-2xl text-2xl font-black shadow-lg active:translate-y-1 transition-all">
+                        <div class="grid grid-cols-2 gap-3 h-1/3">
+                            ${state.currentQuestion ? state.currentQuestion.opts.map((o, i) => `
+                                <button onclick="handleAnswer('${o}')" class="${['bg-red-500','bg-blue-500','bg-yellow-500','bg-green-500'][i]} rounded-3xl text-3xl font-black btn-fancy">
                                     ${o}
                                 </button>
-                            `).join('')}
+                            `).join('') : ''}
                         </div>
-
-                        ${state.lastResult ? `<div class="absolute inset-0 bg-black/60 flex flex-col items-center justify-center z-50">
-                            <div class="text-[10rem] animate-ping opacity-50">${state.lastResult==='correct'?'⭕':'❌'}</div>
+                        ${state.lastResult ? `<div class="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center text-9xl z-50 animate-in fade-in zoom-in">
+                            ${state.lastResult==='correct'?'⭕':'❌'}
                         </div>` : ''}
                     </div>`;
                 }
             }
         }
+
+        render();
     </script>
 </body>
 </html>
