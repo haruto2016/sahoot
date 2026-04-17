@@ -5,14 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>究極の算数カフート -Sahoot! Plus-</title>
     <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Nunito', 'Noto Sans JP', sans-serif; overflow: hidden; background: #46178f; color: white; }
         .kahoot-bg {
             background-color: #46178f;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill-opacity='0.1'%3E%3Cpath fill='%23ffffff' d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z'/%3E%3C/g%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill-opacity='0.1'%3E%3Cpath fill='%23ffffff' d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 86c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z'/%3E%3C/g%3E%3C/svg%3E");
             animation: bgScroll 60s linear infinite;
         }
         @keyframes bgScroll { from { background-position: 0 0; } to { background-position: 1000px 1000px; } }
@@ -24,9 +23,6 @@
         .btn-fancy { transition: all 0.2s; border-bottom: 4px solid rgba(0,0,0,0.3); position: relative; }
         .btn-fancy:active { transform: translateY(2px); border-bottom-width: 1px; }
         
-        .boost-bar { transition: width 0.3s ease; }
-
-        /* お宝流れるアニメーション */
         @keyframes flowItem {
             0% { transform: translateX(110vw) rotate(0deg); }
             100% { transform: translateX(-20vw) rotate(360deg); }
@@ -39,25 +35,29 @@
             font-size: 3rem;
             z-index: 100;
         }
+
+        .submarine-float { animation: floating 3s ease-in-out infinite; }
+        @keyframes floating { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
     </style>
 </head>
 <body class="h-full kahoot-bg" id="bodyRoot">
     <div id="app" class="h-full flex flex-col"></div>
 
     <script>
+        // 設定
         const SB_URL = "https://hqldwfllnqmjcwqgrpjb.supabase.co"; 
         const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxbGR3ZmxsbnFtamN3cWdycGpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMzgzNzksImV4cCI6MjA5MTkxNDM3OX0.WIA3aiAXdN7sZStu_RPMwFLjp2Y8zbbI-vJFa-PIxkI";
         
         let sbClient;
         try {
             sbClient = window.supabase.createClient(SB_URL, SB_KEY);
-        } catch (e) { console.error("Supabase error"); }
+        } catch (e) { console.error("Database initialization failed"); }
 
         let state = {
             view: 'MAIN_MENU',
             userRole: null, 
             gamePin: '',
-            nickname: '',
+            nickname: 'ゲスト',
             playerId: null,
             players: [],
             currentQuestion: null,
@@ -69,7 +69,6 @@
             selectedTopic: 'g6_circle',
             selectedMode: 'submarine',
             
-            // サブマリン用
             boostGauge: 0,
             isBoostPhase: false,
             boostTargetEmoji: '',
@@ -77,18 +76,18 @@
             boostOptions: ['🦀', '🐟', '🐙', '🐡'],
             depth: 0,
 
-            // たからばこ用
             correctStreak: 0,
             isTreasurePhase: false,
-            treasureItems: [], // {id, emoji, type, top}
+            treasureItems: [],
             
-            loading: false
+            loading: false,
+            errorMessage: ''
         };
 
         const modes = {
-            submarine: { name: 'サブマリン', desc: '協力して深海へ！', icon: '🚢', bg: 'sea-bg' },
-            treasure: { name: 'たからばこ', desc: '3回正解でお宝チャンス！', icon: '💎', bg: 'cave-bg' },
-            tower: { name: 'トールタワー', desc: '高く積み上げろ！', icon: '🏰', bg: 'sky-bg' }
+            submarine: { name: 'サブマリン', desc: '深海へ潜れ！ブーストで一気に加速！', icon: '🚢', bg: 'sea-bg' },
+            treasure: { name: 'たからばこ', desc: '3回正解でお宝ラッシュ突入！', icon: '💎', bg: 'cave-bg' },
+            tower: { name: 'トールタワー', desc: '正解して塔を高く積み上げろ！', icon: '🏰', bg: 'sky-bg' }
         };
 
         const topics = {
@@ -117,6 +116,7 @@
 
         async function setView(v) { 
             state.view = v; 
+            state.errorMessage = '';
             const root = document.getElementById('bodyRoot');
             root.className = 'h-full ' + (v === 'PLAYING' ? modes[state.selectedMode].bg : 'kahoot-bg');
             render(); 
@@ -126,22 +126,25 @@
             state.loading = true; render();
             const pin = Math.floor(100000 + Math.random() * 899999).toString();
             state.gamePin = pin;
-            await sbClient.from('game_lobbies').insert([{ 
+            const { error } = await sbClient.from('game_lobbies').insert([{ 
                 game_pin: pin, status: 'waiting', topic: state.selectedTopic, mode: state.selectedMode, team_score: 0 
             }]);
+            if (error) { state.errorMessage = "ロビー作成に失敗しました"; state.loading = false; render(); return; }
             state.loading = false; setView('LOBBY'); subscribeToGame(pin);
         }
 
         async function joinGame() {
-            const pin = document.getElementById('pinInput').value.trim();
+            const pinRaw = document.getElementById('pinInput').value.trim();
             const nick = document.getElementById('nickInput').value.trim();
-            if (!pin || !nick) return;
+            if (!pinRaw || !nick) return;
             state.loading = true; render();
-            const { data: lobby } = await sbClient.from('game_lobbies').select('*').eq('game_pin', pin).maybeSingle();
-            if (!lobby) { alert("PINが無効です"); state.loading = false; render(); return; }
-            const { data: p } = await sbClient.from('players').insert([{ game_pin: pin, nickname: nick, score: 0 }]).select().single();
-            state.gamePin = pin; state.nickname = nick; state.playerId = p.id;
-            state.selectedMode = lobby.mode;
+            const pin = pinRaw.toString();
+            const { data: lobbies, error: findError } = await sbClient.from('game_lobbies').select('*').eq('game_pin', pin).order('created_at', { ascending: false });
+            if (findError || !lobbies || lobbies.length === 0) { state.errorMessage = "有効なPINが見つかりません。"; state.loading = false; render(); return; }
+            const lobby = lobbies[0];
+            const { data: p, error: joinError } = await sbClient.from('players').insert([{ game_pin: pin, nickname: nick, score: 0 }]).select().single();
+            if (joinError) { state.errorMessage = "参加に失敗しました。"; state.loading = false; render(); return; }
+            state.gamePin = pin; state.nickname = nick; state.playerId = p.id; state.selectedMode = lobby.mode;
             state.loading = false; setView('LOBBY'); subscribeToGame(pin);
         }
 
@@ -161,6 +164,7 @@
                     state.teamScore = data.team_score;
                     render();
                 }).subscribe();
+            fetchPlayers(pin);
         }
 
         async function fetchPlayers(pin) {
@@ -177,6 +181,10 @@
             state.gameStatus = 'playing';
             state.view = 'PLAYING';
             state.timeLeft = 60;
+            state.depth = 0;
+            state.boostGauge = 0;
+            state.score = 0;
+            state.correctStreak = 0;
             nextQuestion();
             const timer = setInterval(() => {
                 state.timeLeft--;
@@ -195,36 +203,39 @@
             if (isCorrect) {
                 state.lastResult = 'correct';
                 state.correctStreak++;
+                state.score += 100;
                 
+                // モード別ゲーム要素
                 if (state.selectedMode === 'treasure' && state.correctStreak >= 3) {
                     startTreasurePhase();
+                } else if (state.selectedMode === 'submarine') {
+                    state.depth += 10;
+                    state.boostGauge += 20;
+                    if (state.boostGauge >= 100) startSoloBoost();
                 }
 
+                // クラウド連携
                 if (state.userRole !== 'SOLO') {
                     if (state.selectedMode === 'submarine') {
-                        let newGauge = state.boostGauge + 20;
-                        if (newGauge >= 100) {
-                            const randomPlayer = state.players[Math.floor(Math.random() * state.players.length)];
-                            const randomEmoji = state.boostOptions[Math.floor(Math.random() * state.boostOptions.length)];
-                            await sbClient.from('game_lobbies').update({ 
-                                boost_gauge: 100, is_boost_phase: true, boost_emoji: randomEmoji, boost_player_id: randomPlayer.id
-                            }).eq('game_pin', state.gamePin);
-                        } else {
-                            await sbClient.from('game_lobbies').update({ boost_gauge: newGauge }).eq('game_pin', state.gamePin);
-                        }
-                    } else if (state.selectedMode === 'treasure') {
-                        // たからばこはタップ時に送信するのでここでは何もしない or 基礎点加算
-                        await sbClient.from('players').update({ score: state.score + 50 }).eq('id', state.playerId);
+                        await sbClient.from('game_lobbies').update({ boost_gauge: state.boostGauge, depth: state.depth }).eq('game_pin', state.gamePin);
+                    } else {
+                        await sbClient.from('players').update({ score: state.score }).eq('id', state.playerId);
+                        const { data } = await sbClient.from('game_lobbies').select('team_score').eq('game_pin', state.gamePin).single();
+                        await sbClient.from('game_lobbies').update({ team_score: (data?.team_score || 0) + 100 }).eq('game_pin', state.gamePin);
                     }
-                } else {
-                    state.score += 100;
                 }
             } else { 
                 state.lastResult = 'wrong';
                 state.correctStreak = 0;
             }
             
-            setTimeout(() => { state.lastResult = null; if(!state.isTreasurePhase) nextQuestion(); render(); }, 800);
+            setTimeout(() => { state.lastResult = null; if(!state.isTreasurePhase && !state.isBoostPhase) nextQuestion(); render(); }, 800);
+            render();
+        }
+
+        function startSoloBoost() {
+            state.isBoostPhase = true;
+            state.boostTargetEmoji = state.boostOptions[Math.floor(Math.random() * state.boostOptions.length)];
             render();
         }
 
@@ -232,61 +243,46 @@
             state.isTreasurePhase = true;
             state.correctStreak = 0;
             state.treasureItems = [];
-            
-            // アイテムを生成して流す
-            const icons = [
-                {e:'💎', t:'good'}, {e:'💰', t:'good'}, {e:'👑', t:'good'}, {e:'🪙', t:'good'},
-                {e:'🦴', t:'bad'}, {e:'💀', t:'bad'}, {e:'🐟', t:'bad'} // 死んだ魚
-            ];
-
+            const icons = [{e:'💎', t:'good'}, {e:'💰', t:'good'}, {e:'👑', t:'good'}, {e:'🦴', t:'bad'}, {e:'💀', t:'bad'}];
             let count = 0;
             const itemInterval = setInterval(() => {
                 const item = icons[Math.floor(Math.random() * icons.length)];
-                state.treasureItems.push({
-                    id: Date.now() + Math.random(),
-                    emoji: item.e,
-                    type: item.t,
-                    top: Math.random() * 60 + 20 // 20% to 80% height
-                });
+                state.treasureItems.push({ id: Math.random(), emoji: item.e, type: item.t, top: Math.random() * 60 + 20 });
                 render();
                 count++;
-                if (count > 10) {
+                if (count > 15) {
                     clearInterval(itemInterval);
-                    setTimeout(() => {
-                        state.isTreasurePhase = false;
-                        nextQuestion();
-                        render();
-                    }, 4000);
+                    setTimeout(() => { state.isTreasurePhase = false; nextQuestion(); render(); }, 3000);
                 }
-            }, 300);
+            }, 250);
         }
 
         async function collectTreasure(id, type) {
             state.treasureItems = state.treasureItems.filter(i => i.id !== id);
             const change = type === 'good' ? 200 : -150;
             state.score += change;
-            
-            if (state.userRole !== 'SOLO') {
-                await sbClient.from('players').update({ score: state.score }).eq('id', state.playerId);
-                // チームスコアにも反映
-                const { data } = await sbClient.from('game_lobbies').select('team_score').eq('game_pin', state.gamePin).single();
-                await sbClient.from('game_lobbies').update({ team_score: (data?.team_score || 0) + change }).eq('game_pin', state.gamePin);
-            }
             render();
         }
 
         async function handleBoostClick(emoji) {
             if (!state.isBoostPhase) return;
             if (emoji === state.boostTargetEmoji) {
-                await sbClient.from('game_lobbies').update({ 
-                    is_boost_phase: false, boost_gauge: 0, depth: state.depth + 100, team_score: state.teamScore + 500
-                }).eq('game_pin', state.gamePin);
+                state.depth += 150;
+                state.score += 500;
+                state.boostGauge = 0;
+                state.isBoostPhase = false;
+                
+                if (state.userRole !== 'SOLO') {
+                    await sbClient.from('game_lobbies').update({ is_boost_phase: false, boost_gauge: 0, depth: state.depth }).eq('game_pin', state.gamePin);
+                }
+                nextQuestion();
+                render();
             }
         }
 
         function render() {
             const app = document.getElementById('app');
-            if (state.loading) { app.innerHTML = `<div class="h-full flex items-center justify-center font-bold">読み込み中...</div>`; return; }
+            if (state.loading) { app.innerHTML = `<div class="h-full flex flex-col items-center justify-center p-10"><div class="animate-spin text-5xl mb-4">🌀</div><div class="font-bold text-2xl">読み込み中...</div></div>`; return; }
 
             if (state.view === 'MAIN_MENU') {
                 app.innerHTML = `<div class="flex-1 flex flex-col items-center justify-center p-4">
@@ -300,22 +296,19 @@
             } else if (state.view === 'CONFIG') {
                 app.innerHTML = `<div class="flex-1 p-6 overflow-y-auto bg-white text-black rounded-t-[40px] mt-10">
                     <h2 class="text-2xl font-black mb-4">モード</h2>
-                    <div class="grid grid-cols-1 gap-3 mb-8">
+                    <div class="grid grid-cols-1 gap-2 mb-8">
                         ${Object.entries(modes).map(([id, m]) => `
-                            <div onclick="state.selectedMode='${id}'; render()" class="p-4 border-4 rounded-2xl cursor-pointer flex items-center gap-4 ${state.selectedMode===id?'border-blue-500 bg-blue-50':'border-gray-100'}">
+                            <div onclick="state.selectedMode='${id}'; render()" class="p-4 border-4 rounded-2xl flex items-center gap-4 ${state.selectedMode===id?'border-blue-500 bg-blue-50':'border-gray-100'}">
                                 <div class="text-4xl">${m.icon}</div>
-                                <div>
-                                    <div class="font-bold text-xl">${m.name}</div>
-                                    <div class="text-xs opacity-60">${m.desc}</div>
-                                </div>
+                                <div><div class="font-bold text-lg">${m.name}</div><div class="text-xs opacity-60">${m.desc}</div></div>
                             </div>
                         `).join('')}
                     </div>
                     <h2 class="text-2xl font-black mb-4">単元</h2>
                     <div class="grid grid-cols-1 gap-2 mb-8">
                         ${Object.entries(topics).map(([id, t]) => `
-                            <div onclick="state.selectedTopic='${id}'; render()" class="p-4 border-2 rounded-xl cursor-pointer ${state.selectedTopic===id?'bg-purple-600 text-white border-purple-600':'bg-gray-50'}">
-                                ${t.icon} ${t.name}
+                            <div onclick="state.selectedTopic='${id}'; render()" class="p-4 border-2 rounded-xl flex items-center gap-3 ${state.selectedTopic===id?'bg-purple-600 text-white border-purple-600':'bg-gray-50'}">
+                                <span class="text-2xl">${t.icon}</span> <span class="font-bold">${t.name}</span>
                             </div>
                         `).join('')}
                     </div>
@@ -324,93 +317,100 @@
             } else if (state.view === 'ENTER_PIN') {
                 app.innerHTML = `<div class="flex-1 flex flex-col items-center justify-center p-6 text-black">
                     <div class="bg-white p-8 rounded-3xl w-full max-w-sm shadow-2xl flex flex-col gap-4">
-                        <input id="pinInput" type="number" placeholder="PIN" class="p-4 bg-gray-100 rounded-xl text-center text-3xl font-black">
-                        <input id="nickInput" type="text" placeholder="ニックネーム" class="p-4 bg-gray-100 rounded-xl text-center font-bold">
-                        <button onclick="joinGame()" class="bg-blue-600 text-white py-4 rounded-xl text-2xl font-black">参加！</button>
+                        <h2 class="text-center font-black text-2xl">ゲームに参加</h2>
+                        ${state.errorMessage ? `<div class="bg-red-100 text-red-600 p-3 rounded-xl text-center font-bold text-sm">${state.errorMessage}</div>`:''}
+                        <input id="pinInput" type="number" placeholder="ゲームPINを入力" class="p-4 bg-gray-100 rounded-xl text-center text-3xl font-black focus:outline-blue-500">
+                        <input id="nickInput" type="text" placeholder="ニックネーム" class="p-4 bg-gray-100 rounded-xl text-center font-bold focus:outline-blue-500">
+                        <button onclick="joinGame()" class="bg-blue-600 text-white py-4 rounded-xl text-2xl font-black btn-fancy">参加！</button>
+                        <button onclick="setView('MAIN_MENU')" class="text-gray-400 text-sm font-bold">キャンセル</button>
                     </div>
                 </div>`;
             } else if (state.view === 'LOBBY') {
                 app.innerHTML = `<div class="h-full flex flex-col items-center justify-center p-6 text-center">
                     <div class="text-sm uppercase font-bold tracking-widest opacity-70">GAME PIN</div>
-                    <div class="text-9xl font-black mb-10 italic">${state.gamePin}</div>
-                    <div class="mb-4 font-bold text-xl">${modes[state.selectedMode].icon} モード: ${modes[state.selectedMode].name}</div>
-                    <div class="flex flex-wrap justify-center gap-3 mb-12">
-                        ${state.players.map(p => `<div class="bg-white/20 px-6 py-2 rounded-full font-black text-xl">${p.nickname}</div>`).join('')}
+                    <div class="text-9xl font-black mb-10 italic drop-shadow-lg">${state.gamePin}</div>
+                    <div class="mb-8 font-bold text-xl bg-black/20 px-6 py-2 rounded-full inline-block">${modes[state.selectedMode].icon} ${modes[state.selectedMode].name}モード</div>
+                    <div class="flex flex-wrap justify-center gap-3 mb-12 max-w-lg">
+                        ${state.players.length === 0 ? '<div class="opacity-50">参加者を待っています...</div>' : state.players.map(p => `<div class="bg-white/20 px-6 py-2 rounded-full font-black text-xl animate-bounce">${p.nickname}</div>`).join('')}
                     </div>
-                    ${state.userRole==='HOST'?`<button onclick="startByHost()" class="bg-green-500 px-16 py-6 rounded-3xl text-3xl font-black btn-fancy shadow-xl">ゲームスタート</button>`:'<div class="text-2xl animate-pulse">ホストの開始を待っています...</div>'}
+                    ${state.userRole==='HOST'?`<button onclick="startByHost()" class="bg-green-500 px-16 py-6 rounded-3xl text-3xl font-black btn-fancy shadow-xl">全員揃った！開始！</button>`:'<div class="text-2xl animate-pulse font-black">ホストの開始を待っています...</div>'}
                 </div>`;
             } else if (state.view === 'PLAYING') {
                 if (state.gameStatus === 'finished') {
-                    app.innerHTML = `<div class="h-full flex flex-col items-center justify-center p-10 bg-black/90 text-white">
-                        <h2 class="text-7xl font-black mb-4 italic">TIME UP!</h2>
-                        <div class="text-3xl mb-8">${state.selectedMode==='submarine'?'到達深度: '+state.depth+'m':'スコア: '+(state.userRole==='SOLO'?state.score:state.teamScore)}</div>
-                        <button onclick="location.reload()" class="bg-white text-black px-12 py-4 rounded-full font-black text-2xl">タイトルへ</button>
+                    app.innerHTML = `<div class="h-full flex flex-col items-center justify-center p-10 bg-black/90 text-white text-center">
+                        <h2 class="text-7xl font-black mb-4 italic text-yellow-400">TIME UP!</h2>
+                        <div class="text-4xl mb-8 font-black">${state.selectedMode==='submarine'?'到達深度: '+state.depth+'m':'最終スコア: '+state.score}</div>
+                        <button onclick="location.reload()" class="bg-white text-black px-12 py-4 rounded-full font-black text-2xl shadow-xl">もう一度あそぶ</button>
                     </div>`;
                 } else if (state.isBoostPhase) {
-                    const isTarget = state.playerId === state.boostTargetPlayerId || state.userRole === 'HOST';
                     app.innerHTML = `
-                        <div class="h-full flex flex-col p-6 items-center justify-center bg-blue-500">
-                            <h2 class="text-5xl font-black mb-8 animate-bounce italic">🚀 BOOST TIME!</h2>
-                            <div class="bg-white text-black p-10 rounded-[3rem] shadow-2xl text-center mb-10 w-full max-w-sm">
-                                ${isTarget ? `<div class="text-2xl font-bold mb-4">教えて！</div><div class="text-9xl">${state.boostTargetEmoji}</div>` : `<div class="text-2xl font-bold mb-4">${state.players.find(p=>p.id===state.boostTargetPlayerId)?.nickname}さんの指示を待て！</div><div class="text-8xl opacity-20">❓</div>`}
+                        <div class="h-full flex flex-col p-6 items-center justify-center bg-blue-600">
+                            <h2 class="text-5xl font-black mb-8 animate-bounce italic text-yellow-300">🚀 BOOST!</h2>
+                            <div class="bg-white text-black p-10 rounded-[3.5rem] shadow-2xl text-center mb-10 w-full max-w-sm border-8 border-yellow-400">
+                                <div class="text-2xl font-bold mb-4 uppercase tracking-tighter">同じ絵文字をタップ！</div>
+                                <div class="text-9xl">${state.boostTargetEmoji}</div>
                             </div>
                             <div class="grid grid-cols-2 gap-4 w-full max-w-md h-64">
-                                ${state.boostOptions.map(emoji => `<button onclick="handleBoostClick('${emoji}')" class="bg-white/20 rounded-3xl text-6xl flex items-center justify-center hover:bg-white/40">${emoji}</button>`).join('')}
+                                ${state.boostOptions.map(emoji => `<button onclick="handleBoostClick('${emoji}')" class="bg-white/20 rounded-3xl text-6xl flex items-center justify-center hover:bg-white/40 border-2 border-white/50">${emoji}</button>`).join('')}
                             </div>
                         </div>`;
                 } else if (state.isTreasurePhase) {
                     app.innerHTML = `
                         <div class="h-full relative overflow-hidden flex flex-col items-center justify-center">
-                            <div class="absolute top-10 text-center w-full">
-                                <h2 class="text-5xl font-black italic animate-pulse text-yellow-300">TREASURE TIME!</h2>
-                                <p class="font-bold">お宝をタップしてゲット！骨や死んだ魚はダメ！</p>
-                                <div class="text-3xl font-black mt-4">SCORE: ${state.score}</div>
+                            <div class="absolute top-10 text-center w-full z-10 pointer-events-none">
+                                <h2 class="text-5xl font-black italic animate-pulse text-yellow-300 drop-shadow-lg">TREASURE!</h2>
+                                <div class="text-3xl font-black mt-4 bg-black/60 inline-block px-6 py-2 rounded-full">Score: ${state.score}</div>
                             </div>
-                            ${state.treasureItems.map(item => `
-                                <div key="${item.id}" onclick="collectTreasure('${item.id}', '${item.type}')" class="flowing-item" style="top: ${item.top}%">
-                                    ${item.emoji}
-                                </div>
-                            `).join('')}
+                            <div class="absolute bottom-10 text-8xl submarine-float">🚢</div>
+                            ${state.treasureItems.map(item => `<div key="${item.id}" onclick="collectTreasure('${item.id}', '${item.type}')" class="flowing-item" style="top: ${item.top}%">${item.emoji}</div>`).join('')}
                         </div>`;
                 } else {
-                    let statusArea = `<div class="flex justify-between items-center bg-black/30 p-3 rounded-2xl mb-4">
-                        <div class="font-black text-xl">Score: ${state.userRole==='SOLO'?state.score:(state.selectedMode==='submarine'?state.depth+'m':state.score)}</div>
-                        <div class="text-2xl font-black">${state.timeLeft}s</div>
-                    </div>`;
-                    
-                    if (state.selectedMode === 'submarine') {
-                        statusArea += `
-                            <div class="flex flex-col gap-1 mb-2">
-                                <div class="flex justify-between font-black text-xs uppercase opacity-70">
-                                    <span>Boost Gauge</span>
-                                    <span>${state.boostGauge}%</span>
-                                </div>
-                                <div class="w-full h-3 bg-black/20 rounded-full overflow-hidden">
-                                    <div class="boost-bar h-full bg-yellow-400" style="width: ${state.boostGauge}%"></div>
-                                </div>
-                            </div>`;
-                    } else if (state.selectedMode === 'treasure') {
-                        statusArea += `
-                            <div class="flex gap-2 mb-2 items-center">
-                                <span class="text-xs font-black opacity-70 uppercase">Treasure:</span>
-                                <div class="flex gap-1">
-                                    ${[1,2,3].map(i => `<div class="w-6 h-6 rounded-full border-2 border-white/30 flex items-center justify-center ${state.correctStreak>=i?'bg-yellow-400':''}">💎</div>`).join('')}
-                                </div>
-                            </div>`;
-                    }
-
+                    let scoreVal = state.selectedMode==='submarine' ? state.depth+'m' : state.score;
                     app.innerHTML = `
                         <div class="h-full flex flex-col p-4">
-                            ${statusArea}
-                            <div class="bg-white text-purple-900 rounded-3xl flex-1 flex items-center justify-center text-4xl font-black p-8 mb-4 text-center shadow-inner">
+                            <div class="flex justify-between items-center bg-black/30 p-4 rounded-2xl mb-4 backdrop-blur-md">
+                                <div class="font-black text-xl flex flex-col">
+                                    <span class="text-xs opacity-70">CURRENT SCORE</span>
+                                    <span>${scoreVal}</span>
+                                </div>
+                                <div class="text-3xl font-black bg-white/20 px-6 py-2 rounded-full border-2 border-white/20">${state.timeLeft}s</div>
+                            </div>
+                            
+                            ${state.selectedMode === 'submarine' ? `
+                            <div class="flex items-center gap-4 mb-4">
+                                <div class="text-3xl submarine-float">🚢</div>
+                                <div class="flex-1 h-6 bg-black/30 rounded-full overflow-hidden border-2 border-white/20">
+                                    <div class="h-full bg-yellow-400 transition-all duration-300 shadow-[0_0_15px_rgba(250,204,21,0.5)]" style="width: ${state.boostGauge}%"></div>
+                                </div>
+                                <div class="text-xs font-black w-12 text-center">BOOST</div>
+                            </div>` : ''}
+
+                            ${state.selectedMode === 'treasure' ? `
+                            <div class="flex gap-2 mb-4 items-center justify-center bg-white/10 py-2 rounded-xl">
+                                <span class="text-xs font-black uppercase mr-2">Chance Gauge:</span>
+                                <div class="flex gap-2">
+                                    ${[1,2,3].map(i => `<div class="w-10 h-10 rounded-full border-2 border-white/30 flex items-center justify-center text-xl shadow-lg transition-all ${state.correctStreak>=i?'bg-yellow-400 border-yellow-200 scale-110':'bg-black/20 opacity-30'}">💎</div>`).join('')}
+                                </div>
+                            </div>` : ''}
+
+                            <div class="bg-white text-purple-900 rounded-[3rem] flex-1 flex flex-col items-center justify-center text-4xl font-black p-8 mb-4 text-center shadow-[0_20px_50px_rgba(0,0,0,0.3)] border-b-8 border-gray-200">
+                                <div class="text-sm opacity-40 mb-4 uppercase tracking-widest">${topics[state.selectedTopic].name}</div>
                                 ${state.currentQuestion?.q || '...'}
                             </div>
-                            <div class="grid grid-cols-2 gap-3 h-1/4">
-                                ${state.currentQuestion?.opts.map((o, i) => `<button onclick="handleAnswer('${o}')" class="${['bg-red-500','bg-blue-500','bg-yellow-500','bg-green-500'][i]} rounded-2xl text-3xl font-black shadow-lg btn-fancy">${o}</button>`).join('')}
+
+                            <div class="grid grid-cols-2 gap-3 h-1/3 min-h-[220px]">
+                                ${state.currentQuestion?.opts.map((o, i) => `
+                                    <button onclick="handleAnswer('${o}')" class="${['bg-red-500','bg-blue-500','bg-yellow-500','bg-green-500'][i]} rounded-3xl text-3xl font-black shadow-[0_8px_0_rgba(0,0,0,0.2)] border-black/10 active:border-b-0 active:translate-y-2 transition-all flex items-center justify-center">
+                                        ${o}
+                                    </button>
+                                `).join('')}
                             </div>
-                            ${state.lastResult ? `<div class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-[200]">
-                                <div class="text-9xl mb-4 animate-bounce">${state.lastResult==='correct'?'✨':'💥'}</div>
-                                <div class="text-5xl font-black text-white">${state.lastResult==='correct'?'SEIKAI!':'BOO!'}</div>
+
+                            ${state.lastResult ? `<div class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-[200] transition-opacity duration-300">
+                                <div class="text-[12rem] mb-4 animate-ping opacity-50 absolute">${state.lastResult==='correct'?'✨':'💥'}</div>
+                                <div class="text-9xl mb-4 animate-bounce z-10">${state.lastResult==='correct'?'✨':'💥'}</div>
+                                <div class="text-7xl font-black text-white italic drop-shadow-2xl z-10">${state.lastResult==='correct'?'SEIKAI!':'BOO!'}</div>
+                                ${state.correctStreak > 1 && state.lastResult==='correct' ? `<div class="text-3xl font-black text-yellow-400 mt-4 animate-pulse">${state.correctStreak} COMBO!</div>` : ''}
                             </div>` : ''}
                         </div>`;
                 }
